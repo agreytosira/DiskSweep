@@ -64,6 +64,11 @@ async def test_permanent_confirmation_and_selected_only_removal(tmp_path, make_f
         await wait_idle(pilot, app)
         assert not selected.exists() and kept.exists()
         assert not app.selected and len(app.candidates) == 1
+        assert isinstance(app.screen, MessageScreen)
+        assert app.screen.heading == "Files deleted successfully"
+        assert "Permanently deleted 1 files" in app.screen.message
+        await pilot.click("#close")
+        assert app.main_active()
 
 
 async def test_select_page_and_clear(tmp_path, make_file):
@@ -146,6 +151,8 @@ async def test_paging_preserves_hidden_selections(tmp_path, make_file):
 async def test_full_details_in_main_and_review(tmp_path, make_file):
     from textual.widgets import TextArea
 
+    from disk_sweep.app import MessageScreen
+
     path = make_file("nested/sample.tmp")
     app = SweepApp(ScanOptions((tmp_path,)))
     async with app.run_test(size=(80, 24)) as pilot:
@@ -164,3 +171,44 @@ async def test_full_details_in_main_and_review(tmp_path, make_file):
         assert isinstance(app.screen, ReviewScreen)
         await pilot.press("escape")
         assert path.exists() and app.selected == {str(path)}
+
+
+async def test_trash_success_has_recoverable_completion_message(tmp_path, make_file):
+    from disk_sweep.cleanup import CleanupResult
+
+    path = make_file()
+    app = SweepApp(ScanOptions((tmp_path,)))
+    async with app.run_test(size=(80, 24)) as pilot:
+        app.scan_finished(scan(app.options))
+        item = app.candidates[str(path)]
+        app.selected.add(str(path))
+        app.cleanup_finished(CleanupResult(removed=[item]), "trash")
+        await pilot.pause()
+        assert isinstance(app.screen, MessageScreen)
+        assert app.screen.heading == "Files moved to Trash successfully"
+        assert "Empty Trash to free space" in app.screen.message
+        assert not app.selected and not app.candidates
+        assert app.screen.query_one("#close").region.bottom <= 24
+        await pilot.press("escape")
+        assert app.main_active()
+
+
+async def test_partial_removal_reports_successes_and_failures(tmp_path, make_file):
+    from disk_sweep.cleanup import CleanupResult
+
+    removed = make_file("removed.tmp")
+    kept = make_file("kept.tmp")
+    app = SweepApp(ScanOptions((tmp_path,)))
+    async with app.run_test(size=(100, 32)) as pilot:
+        app.scan_finished(scan(app.options))
+        result = CleanupResult(
+            removed=[app.candidates[str(removed)]],
+            failed=[(app.candidates[str(kept)], "File changed since the scan.")],
+        )
+        app.cleanup_finished(result, "permanent")
+        await pilot.pause()
+        assert app.screen.heading == "Cleanup partially completed"
+        assert "Permanently deleted 1 files" in app.screen.message
+        assert str(kept) in app.screen.message
+        assert "File changed since the scan" in app.screen.message
+        assert str(kept) in app.candidates

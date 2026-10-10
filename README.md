@@ -31,6 +31,10 @@ inspect the complete selection and choose a removal method.
 - **Permanently delete:** requires typing `DELETE` and clicking the final button.
   This cannot be undone.
 
+After removal, an English completion dialog reports the result and total size.
+Trash results explain that you must empty Trash to free space. Partial failures
+show both the successful removal count and the files kept.
+
 Use a terminal at least **80 columns × 24 rows**. A larger window shows more files.
 Windows Terminal is a convenient host; PowerShell and Command Prompt also work.
 

@@ -564,7 +564,22 @@ class SweepApp(App[None]):
         self.render_files()
         if result.failed:
             details = "\n\n".join(f"{item.path}\n{reason}" for item, reason in result.failed)
-            self.push_screen(MessageScreen("Files kept · removal errors", details))
+            title = (
+                "Cleanup partially completed" if result.removed else "Files kept · removal errors"
+            )
+            self.push_screen(MessageScreen(title, f"{message}\n\nFiles kept:\n{details}"))
+        else:
+            if result.cancelled:
+                title = "Cleanup stopped"
+            elif result.removed:
+                title = (
+                    "Files deleted successfully"
+                    if mode == "permanent"
+                    else "Files moved to Trash successfully"
+                )
+            else:
+                title = "No files removed"
+            self.push_screen(MessageScreen(title, message))
 
     def action_details(self) -> None:
         if not self.page_items or not self.main_active():
