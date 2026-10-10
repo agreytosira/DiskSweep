@@ -42,7 +42,8 @@ Windows Terminal is a convenient host; PowerShell and Command Prompt also work.
 
 The initial folders are your user temporary folder and Downloads, if present.
 The status line lists all initial roots. Changing the folder field replaces these
-with that one folder.
+with that one folder. **Right-click the folder input to paste clipboard text**;
+selected text is replaced, otherwise text is inserted at the cursor.
 The **Temp + Downloads** preset restores the initial locations.
 
 By default, only files modified at least **7 days ago** appear. Set age to **0**

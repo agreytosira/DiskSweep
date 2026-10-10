@@ -7,7 +7,7 @@ from dataclasses import replace
 from pathlib import Path
 
 from rich.text import Text
-from textual import on, work
+from textual import events, on, work
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
@@ -15,6 +15,7 @@ from textual.screen import ModalScreen
 from textual.widgets import Button, DataTable, Footer, Header, Input, Select, Static, TextArea
 
 from disk_sweep.cleanup import CleanupResult, RemovalMode, remove_selected
+from disk_sweep.clipboard import read_clipboard_text
 from disk_sweep.scanner import Candidate, ScanOptions, ScanResult, default_roots, human_size, scan
 
 PAGE_SIZE = 500
@@ -31,6 +32,28 @@ def file_details(item: Candidate) -> str:
         f"Modified: {item.age_days:.1f} days ago\nCategory: {item.category}\n\n"
         f"{item.reason}\n\nScanned folder: {item.root}"
     )
+
+
+class FolderInput(Input):
+    """Allow right-click to paste OS clipboard text into the folder field."""
+
+    BINDINGS = [Binding("ctrl+a", "select_all", show=False)]
+
+    def on_mouse_down(self, event: events.MouseDown) -> None:
+        if event.button != 3:
+            return
+        event.prevent_default()
+        event.stop()
+        if self.disabled:
+            return
+        try:
+            text = read_clipboard_text()
+        except RuntimeError as exc:
+            self.app.notify(str(exc), title="Paste unavailable", severity="warning")
+            return
+        if text:
+            self.focus()
+            self.post_message(events.Paste(text))
 
 
 class MessageScreen(ModalScreen[None]):
@@ -183,9 +206,9 @@ class SweepApp(App[None]):
                 allow_blank=False,
                 id="target",
             )
-            yield Input(
+            yield FolderInput(
                 value=self.initial_root,
-                placeholder="Folder to scan",
+                placeholder="Folder to scan · right-click to paste",
                 id="root",
             )
             yield Button("Scan", id="scan", variant="primary")
@@ -594,6 +617,7 @@ class SweepApp(App[None]):
         message = (
             "QUICK START\n"
             "1. Choose a folder or the Temp + Downloads preset; press Scan.\n"
+            "Right-click the folder input to paste text from your clipboard.\n"
             "2. Use arrows to move. Space / Enter / click toggles a file.\n"
             "3. Search full paths and filter by category. Selections stay selected.\n"
             "4. Review selected shows ALL selected files, including hidden selections.\n"

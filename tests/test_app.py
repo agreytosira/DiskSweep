@@ -212,3 +212,67 @@ async def test_partial_removal_reports_successes_and_failures(tmp_path, make_fil
         assert str(kept) in app.screen.message
         assert "File changed since the scan" in app.screen.message
         assert str(kept) in app.candidates
+
+
+async def test_right_click_pastes_folder_and_replaces_selected_text(tmp_path, monkeypatch):
+    from disk_sweep import app as app_module
+
+    copied_path = str(tmp_path / "folder with spaces")
+    monkeypatch.setattr(app_module, "read_clipboard_text", lambda: copied_path)
+    app = SweepApp(ScanOptions((tmp_path,)))
+    async with app.run_test(size=(100, 32)) as pilot:
+        field = app.query_one("#root", Input)
+        field.focus()
+        await pilot.pause()
+        await pilot.press("ctrl+a")
+        await pilot.click("#root", button=3)
+        await pilot.pause()
+        assert field.value == copied_path
+        assert field.has_focus
+
+
+async def test_right_click_inserts_at_current_cursor(tmp_path, monkeypatch):
+    from disk_sweep import app as app_module
+
+    monkeypatch.setattr(app_module, "read_clipboard_text", lambda: "folder with spaces")
+    app = SweepApp(ScanOptions((tmp_path,)))
+    async with app.run_test(size=(100, 32)) as pilot:
+        field = app.query_one("#root", Input)
+        field.focus()
+        await pilot.pause()
+        field.value = "D:/"
+        field.cursor_position = 3
+        await pilot.click("#root", button=3)
+        await pilot.pause()
+        assert field.value == "D:/folder with spaces"
+
+
+async def test_right_click_paste_failure_keeps_input(tmp_path, monkeypatch):
+    from disk_sweep import app as app_module
+
+    def unavailable():
+        raise RuntimeError("Clipboard unavailable. Use your terminal's Paste shortcut.")
+
+    monkeypatch.setattr(app_module, "read_clipboard_text", unavailable)
+    app = SweepApp(ScanOptions((tmp_path,)))
+    async with app.run_test(size=(100, 32)) as pilot:
+        original = app.query_one("#root", Input).value
+        await pilot.click("#root", button=3)
+        await pilot.pause()
+        assert app.query_one("#root", Input).value == original
+        assert any(note.title == "Paste unavailable" for note in app._notifications)
+
+
+async def test_disabled_folder_input_does_not_read_clipboard(tmp_path, monkeypatch):
+    from disk_sweep import app as app_module
+
+    calls = []
+    monkeypatch.setattr(app_module, "read_clipboard_text", lambda: calls.append("read") or "D:/")
+    app = SweepApp(ScanOptions((tmp_path,)))
+    async with app.run_test(size=(100, 32)) as pilot:
+        field = app.query_one("#root", Input)
+        field.disabled = True
+        original = field.value
+        await pilot.click("#root", button=3)
+        await pilot.pause()
+        assert not calls and field.value == original
