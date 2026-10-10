@@ -22,7 +22,8 @@ Try disposable sample files first (about one minute):
 ```
 
 Choose **Scan**, move with the arrow keys, and press **Space** to select a file.
-Clicking a row or pressing Enter also toggles it. Choose **Review selected** to
+Clicking a row or pressing Enter also toggles it. Selected files display **[✓]**;
+unselected files display **[ ]**. Choose **Review selected** to
 inspect the complete selection and choose a removal method.
 
 - **Recycle Bin / Trash:** recoverable through your operating system. Empty it

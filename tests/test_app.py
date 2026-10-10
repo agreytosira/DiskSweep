@@ -23,6 +23,14 @@ async def test_scan_toggle_filter_and_cancel_review(tmp_path, make_file):
         assert len(app.page_items) == 2
         await pilot.press("space")
         assert app.selected == {str(first)}
+        table = app.query_one("#files", DataTable)
+        assert table.get_cell(str(first), "pick").plain == "[✓]"
+        assert table.get_cell(str(second), "pick").plain == "[ ]"
+        assert table.row_count == 2
+        await pilot.press("space")
+        assert table.get_cell(str(first), "pick").plain == "[ ]"
+        await pilot.press("space")
+        assert table.get_cell(str(first), "pick").plain == "[✓]"
         app.query_one("#search", Input).value = "b.tmp"
         await pilot.pause(0.3)
         assert [item.path for item in app.page_items] == [second]
@@ -66,8 +74,11 @@ async def test_select_page_and_clear(tmp_path, make_file):
         app.scan_finished(scan(app.options))
         await pilot.click("#select-page")
         assert len(app.selected) == 3
+        table = app.query_one("#files", DataTable)
+        assert all(table.get_cell(key, "pick").plain == "[✓]" for key in app.selected)
         await pilot.click("#clear")
         assert not app.selected
+        assert all(table.get_cell(str(item.path), "pick").plain == "[ ]" for item in app.page_items)
 
 
 async def test_invalid_folder_keeps_previous_results(tmp_path, make_file):

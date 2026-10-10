@@ -20,6 +20,11 @@ from disk_sweep.scanner import Candidate, ScanOptions, ScanResult, default_roots
 PAGE_SIZE = 500
 
 
+def selection_marker(selected: bool) -> Text:
+    # Plain Text preserves the checkbox instead of interpreting it as Rich markup.
+    return Text("[✓]" if selected else "[ ]", style="bold" if selected else "")
+
+
 def file_details(item: Candidate) -> str:
     return (
         f"FILE\n{item.path}\n\nSize: {human_size(item.size)} ({item.size:,} bytes)\n"
@@ -403,7 +408,7 @@ class SweepApp(App[None]):
         for item in self.page_items:
             key = str(item.path)
             table.add_row(
-                "[x]" if key in self.selected else "[ ]",
+                selection_marker(key in self.selected),
                 human_size(item.size),
                 f"{item.age_days:.0f}d",
                 item.category,
@@ -471,7 +476,7 @@ class SweepApp(App[None]):
         if self.query_one("#category", Select).value == "selected":
             self.render_files()
         else:
-            table.update_cell(key, "pick", "[x]" if key in self.selected else "[ ]")
+            table.update_cell(key, "pick", selection_marker(key in self.selected))
             self.update_totals()
 
     @on(Button.Pressed, "#select-page")
