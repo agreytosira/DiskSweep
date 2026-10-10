@@ -5,8 +5,12 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import os
 import sys
+import tempfile
+import time
 from collections.abc import Sequence
+from contextlib import contextmanager
 from pathlib import Path
 
 from rich.console import Console
@@ -41,11 +45,14 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="disk-sweep",
         description="Scan, select, and review files before cleaning disk space.",
-        epilog="Run disk-sweep scan for a read-only report. No files are deleted.",
+        epilog="Run disk-sweep with no arguments for the TUI. Nothing is selected automatically.",
     )
     parser.add_argument("--version", action="version", version=f"Disk Sweep {__version__}")
     commands = parser.add_subparsers(dest="command")
-    for name, help_text in (("scan", "Read-only scan report; never deletes files"),):
+    for name, help_text in (
+        ("tui", "Interactive cleanup (default)"),
+        ("scan", "Read-only scan report; never deletes files"),
+    ):
         command = commands.add_parser(name, help=help_text)
         command.add_argument(
             "paths", nargs="*", type=Path, help="Folders (default: Temp + Downloads)"
@@ -86,7 +93,33 @@ def build_parser() -> argparse.ArgumentParser:
         )
         if name == "scan":
             command.add_argument("--json", action="store_true", help="Machine-readable report")
+        else:
+            command.add_argument(
+                "--demo", action="store_true", help="Try the TUI with disposable sample files"
+            )
     return parser
+
+
+@contextmanager
+def demo_folder():
+    with tempfile.TemporaryDirectory(prefix="disk-sweep-demo-") as folder:
+        root = Path(folder).resolve()
+        samples = (
+            ("old-download.tmp", 3 * MIB, 34),
+            ("app/cache/render.bin", 8 * MIB, 14),
+            ("python/__pycache__/module.pyc", 2 * MIB, 9),
+            ("logs/debug.log", MIB, 60),
+            ("backup/settings.bak", 8192, 90),
+            ("keep-me.txt", 64, 0),
+        )
+        for name, size, age in samples:
+            path = root / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            with path.open("wb") as stream:
+                stream.truncate(size)
+            modified = time.time() - age * 86400
+            os.utime(path, (modified, modified))
+        yield root
 
 
 def options_from_args(args: argparse.Namespace, roots: tuple[Path, ...]) -> ScanOptions:
@@ -103,8 +136,8 @@ def options_from_args(args: argparse.Namespace, roots: tuple[Path, ...]) -> Scan
 
 def main(argv: Sequence[str] | None = None) -> int:
     values = list(sys.argv[1:] if argv is None else argv)
-    if not values or values[0] not in {"scan", "-h", "--help", "--version"}:
-        values.insert(0, "scan")
+    if not values or values[0] not in {"scan", "tui", "-h", "--help", "--version"}:
+        values.insert(0, "tui")
     parser = build_parser()
     args = parser.parse_args(values)
     roots = tuple(args.paths) or default_roots()
@@ -153,6 +186,13 @@ def main(argv: Sequence[str] | None = None) -> int:
                 for error in result.errors:
                     console.print(Text(error, style="yellow"))
             return 0
+        from disk_sweep.app import SweepApp
+
+        if args.demo:
+            with demo_folder() as root:
+                SweepApp(options_from_args(args, (root,)), demo=True).run()
+        else:
+            SweepApp(options).run()
         return 0
     except (OSError, ValueError, OverflowError) as exc:
         print(f"disk-sweep: {exc}", file=sys.stderr)
